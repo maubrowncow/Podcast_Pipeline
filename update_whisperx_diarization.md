@@ -1,3 +1,28 @@
+# Update WhisperX Server — Add Speaker Diarization
+
+Update the existing WhisperX Flask server at `C:\whisper-server\whisperx-server.py` to support speaker diarization (identifying who is speaking).
+
+---
+
+## Requirements
+
+Install pyannote:
+
+```powershell
+pip install pyannote.audio
+```
+
+---
+
+## Changes to `C:\whisper-server\whisperx-server.py`
+
+Update the `/transcribe` endpoint to accept a `diarize` parameter and a `hf_token` parameter. When diarization is requested, run the pyannote pipeline after transcription and alignment, then assign speakers to each word and segment.
+
+### Updated server code
+
+Replace the entire contents of `C:\whisper-server\whisperx-server.py` with:
+
+```python
 """
 WhisperX HTTP Server
 Provides transcription API via HTTP for remote agents.
@@ -8,7 +33,6 @@ Endpoint: POST /transcribe - upload audio file, get transcription
 import os
 os.environ["PATH"] = r"C:\ffmpeg\bin;" + os.environ.get("PATH", "")
 
-import gc
 import tempfile
 import time
 from flask import Flask, request, jsonify
@@ -20,29 +44,18 @@ PORT = int(os.environ.get("PORT", 9000))
 
 # Global models
 model = None
-current_model_name = None
 align_model = None
 align_metadata = None
 diarize_model = None
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
 
-def get_model(model_name="small"):
-    global model, current_model_name, align_model, align_metadata
-    if model is None or current_model_name != model_name:
-        if model is not None:
-            print(f"Unloading model '{current_model_name}', loading '{model_name}'...")
-            del model
-            # Reset alignment model when base model changes
-            align_model = None
-            align_metadata = None
-            gc.collect()
-            if torch.cuda.is_available():
-                torch.cuda.empty_cache()
-        print(f"Loading WhisperX model '{model_name}' on {device}...")
-        model = whisperx.load_model(model_name, device, compute_type="float16" if device == "cuda" else "int8")
-        current_model_name = model_name
-        print(f"Model '{model_name}' loaded!")
+def get_model():
+    global model
+    if model is None:
+        print(f"Loading WhisperX model on {device}...")
+        model = whisperx.load_model("large-v3", device, compute_type="float16" if device == "cuda" else "int8")
+        print("Model loaded!")
     return model
 
 
@@ -50,26 +63,7 @@ def get_diarize_model(hf_token):
     global diarize_model
     if diarize_model is None:
         print("Loading diarization pipeline...")
-        try:
-            # Try whisperx built-in first
-            diarize_model = whisperx.DiarizationPipeline(use_auth_token=hf_token, device=device)
-        except (AttributeError, TypeError):
-            try:
-                # Fallback: load pyannote directly (newer API uses 'token')
-                from pyannote.audio import Pipeline
-                diarize_model = Pipeline.from_pretrained(
-                    "pyannote/speaker-diarization-3.1",
-                    token=hf_token,
-                )
-                diarize_model.to(torch.device(device))
-            except TypeError:
-                # Oldest API fallback
-                from pyannote.audio import Pipeline
-                diarize_model = Pipeline.from_pretrained(
-                    "pyannote/speaker-diarization-3.1",
-                    use_auth_token=hf_token,
-                )
-                diarize_model.to(torch.device(device))
+        diarize_model = whisperx.DiarizationPipeline(use_auth_token=hf_token, device=device)
         print("Diarization pipeline loaded!")
     return diarize_model
 
@@ -78,7 +72,7 @@ def get_diarize_model(hf_token):
 def health():
     return jsonify({
         "status": "ok",
-        "model": f"whisperx-{current_model_name}" if current_model_name else "none",
+        "model": "whisperx-large-v3",
         "device": device,
         "gpu": torch.cuda.get_device_name(0) if torch.cuda.is_available() else None,
         "diarization": "available",
@@ -92,7 +86,6 @@ def transcribe():
 
     Form data:
     - file: Audio file (required)
-    - model: Model name (optional, default "small")
     - align: "true" to get word-level timestamps (optional, default false)
     - diarize: "true" to identify speakers (optional, default false)
     - hf_token: HuggingFace token for diarization (required if diarize=true)
@@ -104,7 +97,6 @@ def transcribe():
         return jsonify({"error": "No file provided. Use multipart/form-data with 'file' field."}), 400
 
     file = request.files["file"]
-    requested_model = request.form.get("model", "small")
     do_align = request.form.get("align", "false").lower() == "true"
     do_diarize = request.form.get("diarize", "false").lower() == "true"
     hf_token = request.form.get("hf_token", os.environ.get("HF_TOKEN", ""))
@@ -120,7 +112,7 @@ def transcribe():
 
     try:
         start = time.time()
-        m = get_model(requested_model)
+        m = get_model()
 
         # Load and transcribe
         audio = whisperx.load_audio(tmp_path)
@@ -139,13 +131,6 @@ def transcribe():
         if do_diarize:
             dm = get_diarize_model(hf_token)
             diarize_segments = dm(audio)
-            # Convert Annotation to DataFrame if needed (pyannote compat)
-            if hasattr(diarize_segments, 'itertracks'):
-                import pandas as pd
-                rows = []
-                for turn, _, speaker in diarize_segments.itertracks(yield_label=True):
-                    rows.append({"start": turn.start, "end": turn.end, "speaker": speaker})
-                diarize_segments = pd.DataFrame(rows)
             result = whisperx.assign_word_speakers(diarize_segments, result)
 
         elapsed = time.time() - start
@@ -159,7 +144,6 @@ def transcribe():
             "processing_seconds": round(elapsed, 2),
             "realtime_factor": round(elapsed / duration, 2) if duration > 0 else None,
             "diarized": do_diarize,
-            "model": requested_model,
         })
     except Exception as e:
         import traceback
@@ -174,7 +158,7 @@ def models():
     """List available models."""
     return jsonify({
         "available": ["tiny", "base", "small", "medium", "large-v2", "large-v3"],
-        "loaded": current_model_name,
+        "loaded": "large-v3" if model else None,
         "device": device,
         "diarization_loaded": diarize_model is not None,
     })
@@ -186,3 +170,45 @@ if __name__ == "__main__":
     if torch.cuda.is_available():
         print(f"GPU: {torch.cuda.get_device_name(0)}")
     app.run(host="0.0.0.0", port=PORT, threaded=False)
+```
+
+---
+
+## What changed
+
+1. Added `diarize` parameter to `/transcribe` (default: false)
+2. Added `hf_token` parameter — can also be set via `HF_TOKEN` env var
+3. When `diarize=true`, alignment is automatically enabled (required for speaker assignment)
+4. Diarization pipeline loads on first use and stays cached
+5. Each segment and word in the response gets a `speaker` field (e.g., `SPEAKER_00`, `SPEAKER_01`)
+6. Health endpoint now reports diarization availability
+
+---
+
+## After updating, restart the server
+
+```powershell
+# Kill the existing server process, then:
+cd C:\whisper-server
+python whisperx-server.py
+```
+
+The first diarization request will download pyannote models (~1GB). Subsequent requests will be faster.
+
+---
+
+## Test diarization
+
+```bash
+curl -X POST http://100.67.12.59:9000/transcribe \
+  -F "file=@audio.mp3" \
+  -F "align=true" \
+  -F "diarize=true" \
+  -F "hf_token=YOUR_HF_TOKEN"
+```
+
+Expected output: segments and words now include `"speaker": "SPEAKER_00"` etc.
+
+---
+
+*Created: March 17, 2026*

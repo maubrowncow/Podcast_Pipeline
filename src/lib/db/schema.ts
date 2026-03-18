@@ -7,6 +7,7 @@ export const jobs = sqliteTable(
     status: text("status").notNull().default("pending"),
     originalFilename: text("original_filename").notNull(),
     filePath: text("file_path").notNull(),
+    whisperModel: text("whisper_model").notNull().default("small"),
     transcriptPath: text("transcript_path"),
     error: text("error"),
     language: text("language"),
@@ -24,3 +25,19 @@ export const jobs = sqliteTable(
 
 export type Job = typeof jobs.$inferSelect;
 export type NewJob = typeof jobs.$inferInsert;
+
+export const jobLogs = sqliteTable(
+  "job_logs",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    jobId: integer("job_id").notNull(),
+    level: text("level").notNull().default("info"),
+    message: text("message").notNull(),
+    createdAt: integer("created_at", { mode: "timestamp" })
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (table) => [index("idx_job_logs_job_id").on(table.jobId)]
+);
+
+export type JobLog = typeof jobLogs.$inferSelect;

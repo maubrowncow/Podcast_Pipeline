@@ -6,6 +6,7 @@ import Link from "next/link";
 import { StatusBadge } from "@/components/status-badge";
 import { JobMetadata } from "@/components/job-metadata";
 import { TranscriptViewer } from "@/components/transcript-viewer";
+import { JobLogViewer } from "@/components/job-log-viewer";
 
 interface JobData {
   id: number;
@@ -91,20 +92,10 @@ export default function JobPage() {
 
       {job.status === "completed" && <TranscriptViewer jobId={job.id} />}
 
-      {job.status === "processing" && (
-        <div className="text-center py-8 text-muted">
-          <div className="text-2xl mb-2 animate-pulse">🔄</div>
-          <p>Transcription in progress...</p>
-          <p className="text-xs mt-1">This page will update automatically.</p>
-        </div>
-      )}
-
-      {job.status === "pending" && (
-        <div className="text-center py-8 text-muted">
-          <p>Waiting in queue...</p>
-          <p className="text-xs mt-1">This page will update when processing begins.</p>
-        </div>
-      )}
+      <JobLogViewer
+        jobId={job.id}
+        isActive={job.status === "processing" || job.status === "pending"}
+      />
     </div>
   );
 }

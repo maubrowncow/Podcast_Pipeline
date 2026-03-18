@@ -1,10 +1,19 @@
 "use client";
 
 import { useState, useRef, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { UploadProgress } from "./upload-progress";
 
 const ALLOWED_TYPES = ["mp3", "wav", "m4a", "flac", "ogg", "webm"];
-const ALLOWED_MIME_PREFIXES = ["audio/", "video/webm"];
+
+const WHISPER_MODELS = [
+  { value: "tiny", label: "Tiny", desc: "Fastest, lowest accuracy" },
+  { value: "base", label: "Base", desc: "Fast, basic accuracy" },
+  { value: "small", label: "Small", desc: "Good balance of speed and accuracy" },
+  { value: "medium", label: "Medium", desc: "Higher accuracy, slower" },
+  { value: "large-v2", label: "Large v2", desc: "High accuracy" },
+  { value: "large-v3", label: "Large v3", desc: "Highest accuracy, slowest" },
+];
 
 interface UploadItem {
   file: File;
@@ -15,8 +24,10 @@ interface UploadItem {
 }
 
 export function UploadZone() {
+  const router = useRouter();
   const [uploads, setUploads] = useState<UploadItem[]>([]);
   const [isDragging, setIsDragging] = useState(false);
+  const [whisperModel, setWhisperModel] = useState("small");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const isValidFile = (file: File): boolean => {
@@ -24,10 +35,11 @@ export function UploadZone() {
     return ALLOWED_TYPES.includes(ext);
   };
 
-  const uploadFile = useCallback((file: File, index: number) => {
+  const uploadFile = useCallback((file: File, index: number, model: string) => {
     const xhr = new XMLHttpRequest();
     const formData = new FormData();
     formData.append("file", file);
+    formData.append("whisperModel", model);
 
     xhr.upload.addEventListener("progress", (e) => {
       if (e.lengthComputable) {
@@ -49,6 +61,10 @@ export function UploadZone() {
             i === index ? { ...u, progress: 100, status: "done", jobId } : u
           )
         );
+        // Navigate to job page immediately
+        if (jobId) {
+          router.push(`/jobs/${jobId}`);
+        }
       } else {
         let error = "Upload failed";
         try {
@@ -100,10 +116,10 @@ export function UploadZone() {
       setUploads((prev) => [...prev, ...newUploads]);
 
       validFiles.forEach((file, i) => {
-        uploadFile(file, startIndex + i);
+        uploadFile(file, startIndex + i, whisperModel);
       });
     },
-    [uploads.length, uploadFile]
+    [uploads.length, uploadFile, whisperModel]
   );
 
   const handleDrop = useCallback(
@@ -130,6 +146,24 @@ export function UploadZone() {
 
   return (
     <div className="space-y-6">
+      <div className="flex items-center gap-4">
+        <label htmlFor="whisper-model" className="text-sm font-medium shrink-0">
+          Whisper Model
+        </label>
+        <select
+          id="whisper-model"
+          value={whisperModel}
+          onChange={(e) => setWhisperModel(e.target.value)}
+          className="border border-border rounded-lg px-3 py-1.5 text-sm bg-card text-foreground"
+        >
+          {WHISPER_MODELS.map((m) => (
+            <option key={m.value} value={m.value}>
+              {m.label} — {m.desc}
+            </option>
+          ))}
+        </select>
+      </div>
+
       <div
         onDrop={handleDrop}
         onDragOver={handleDragOver}

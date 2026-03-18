@@ -27,7 +27,8 @@ export interface WhisperXResult {
 }
 
 export async function transcribeFile(
-  filePath: string
+  filePath: string,
+  model: string = "small"
 ): Promise<WhisperXResult> {
   const whisperxUrl = process.env.WHISPERX_URL || "http://localhost:9000";
 
@@ -37,6 +38,12 @@ export async function transcribeFile(
   const formData = new FormData();
   formData.append("file", new Blob([fileBuffer]), filename);
   formData.append("align", "true");
+  formData.append("diarize", "true");
+  formData.append("model", model);
+  const hfToken = process.env.HF_TOKEN;
+  if (hfToken) {
+    formData.append("hf_token", hfToken);
+  }
 
   const controller = new AbortController();
   // 30 minute timeout for large files

@@ -233,7 +233,8 @@ curl -X POST http://100.67.12.59:9000/transcribe \
 
 | Service | Port | URL | Status |
 |---------|------|-----|--------|
-| WhisperX Server | 9000 | `http://100.67.12.59:9000` | **Not running** (start manually) |
+| WhisperX Server | 9000 | `http://100.67.12.59:9000` | ✅ Running |
+| SenseVoice Server | 9001 | `http://100.67.12.59:9001` | ✅ Running |
 | Piper TTS | 3456 | `http://100.67.12.59:3456` | ✅ Running |
 | Qwen3 TTS | 3457 | `http://100.67.12.59:3457` | ✅ Running |
 | Llama Server | 8888 | `http://100.67.12.59:8888` | ✅ Running |

@@ -60,7 +60,7 @@ export function JobCard({
   onCancel: (id: number) => void;
   onDelete: (id: number) => void;
 }) {
-  const isClickable = job.status === "completed";
+  const isClickable = job.status !== "cancelled";
 
   const card = (
     <div

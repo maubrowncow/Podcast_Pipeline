@@ -32,6 +32,13 @@ export async function POST(req: NextRequest) {
     let fileCount = 0;
     let processedCount = 0;
     let hasError = false;
+    let whisperModel = "small";
+
+    bb.on("field", (name, value) => {
+      if (name === "whisperModel") {
+        whisperModel = value;
+      }
+    });
 
     bb.on("file", (_fieldname, fileStream, info) => {
       fileCount++;
@@ -71,6 +78,7 @@ export async function POST(req: NextRequest) {
             originalFilename: info.filename,
             filePath: savePath,
             fileSizeBytes: fileSize,
+            whisperModel,
           })
           .returning()
           .get();
