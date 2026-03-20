@@ -28,7 +28,8 @@ export interface WhisperXResult {
 
 export async function transcribeFile(
   filePath: string,
-  model: string = "small"
+  model: string = "small",
+  numSpeakers?: number
 ): Promise<WhisperXResult> {
   const whisperxUrl = process.env.WHISPERX_URL || "http://localhost:9000";
 
@@ -40,6 +41,7 @@ export async function transcribeFile(
   formData.append("align", "true");
   formData.append("diarize", "true");
   formData.append("model", model);
+  if (numSpeakers) formData.append("num_speakers", String(numSpeakers));
   const hfToken = process.env.HF_TOKEN;
   if (hfToken) {
     formData.append("hf_token", hfToken);

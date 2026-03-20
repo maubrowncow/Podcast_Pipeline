@@ -46,3 +46,7 @@ next-env.d.ts
 # python
 __pycache__/
 *.pyc
+
+# sensitive docs (SSH credentials, connection details)
+windows-pc-ssh-agent-guide.md
+windows-ssh-setup.md

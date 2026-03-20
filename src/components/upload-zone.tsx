@@ -6,14 +6,6 @@ import { UploadProgress } from "./upload-progress";
 
 const ALLOWED_TYPES = ["mp3", "wav", "m4a", "flac", "ogg", "webm"];
 
-const WHISPER_MODELS = [
-  { value: "tiny", label: "Tiny", desc: "Fastest, lowest accuracy" },
-  { value: "base", label: "Base", desc: "Fast, basic accuracy" },
-  { value: "small", label: "Small", desc: "Good balance of speed and accuracy" },
-  { value: "medium", label: "Medium", desc: "Higher accuracy, slower" },
-  { value: "large-v2", label: "Large v2", desc: "High accuracy" },
-  { value: "large-v3", label: "Large v3", desc: "Highest accuracy, slowest" },
-];
 
 interface UploadItem {
   file: File;
@@ -27,7 +19,7 @@ export function UploadZone() {
   const router = useRouter();
   const [uploads, setUploads] = useState<UploadItem[]>([]);
   const [isDragging, setIsDragging] = useState(false);
-  const [whisperModel, setWhisperModel] = useState("small");
+  const [numSpeakers, setNumSpeakers] = useState<string>("2");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const isValidFile = (file: File): boolean => {
@@ -35,11 +27,11 @@ export function UploadZone() {
     return ALLOWED_TYPES.includes(ext);
   };
 
-  const uploadFile = useCallback((file: File, index: number, model: string) => {
+  const uploadFile = useCallback((file: File, index: number, speakers: string) => {
     const xhr = new XMLHttpRequest();
     const formData = new FormData();
     formData.append("file", file);
-    formData.append("whisperModel", model);
+    if (speakers) formData.append("numSpeakers", speakers);
 
     xhr.upload.addEventListener("progress", (e) => {
       if (e.lengthComputable) {
@@ -116,10 +108,10 @@ export function UploadZone() {
       setUploads((prev) => [...prev, ...newUploads]);
 
       validFiles.forEach((file, i) => {
-        uploadFile(file, startIndex + i, whisperModel);
+        uploadFile(file, startIndex + i, numSpeakers);
       });
     },
-    [uploads.length, uploadFile, whisperModel]
+    [uploads.length, uploadFile, numSpeakers]
   );
 
   const handleDrop = useCallback(
@@ -147,21 +139,18 @@ export function UploadZone() {
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-4">
-        <label htmlFor="whisper-model" className="text-sm font-medium shrink-0">
-          Whisper Model
+        <label htmlFor="num-speakers" className="text-sm font-medium shrink-0">
+          Number of Speakers
         </label>
-        <select
-          id="whisper-model"
-          value={whisperModel}
-          onChange={(e) => setWhisperModel(e.target.value)}
-          className="border border-border rounded-lg px-3 py-1.5 text-sm bg-card text-foreground"
-        >
-          {WHISPER_MODELS.map((m) => (
-            <option key={m.value} value={m.value}>
-              {m.label} — {m.desc}
-            </option>
-          ))}
-        </select>
+        <input
+          id="num-speakers"
+          type="number"
+          min="1"
+          max="32"
+          value={numSpeakers}
+          onChange={(e) => setNumSpeakers(e.target.value)}
+          className="border border-border rounded-lg px-3 py-1.5 text-sm bg-card text-foreground w-20"
+        />
       </div>
 
       <div

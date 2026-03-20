@@ -8,6 +8,7 @@ export const jobs = sqliteTable(
     originalFilename: text("original_filename").notNull(),
     filePath: text("file_path").notNull(),
     whisperModel: text("whisper_model").notNull().default("small"),
+    numSpeakers: integer("num_speakers"),
     transcriptPath: text("transcript_path"),
     error: text("error"),
     language: text("language"),

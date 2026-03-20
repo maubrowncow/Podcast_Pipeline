@@ -33,10 +33,13 @@ export async function POST(req: NextRequest) {
     let processedCount = 0;
     let hasError = false;
     let whisperModel = "small";
+    let numSpeakers: number | undefined;
 
     bb.on("field", (name, value) => {
-      if (name === "whisperModel") {
-        whisperModel = value;
+      if (name === "whisperModel") whisperModel = value;
+      if (name === "numSpeakers") {
+        const n = parseInt(value, 10);
+        if (!isNaN(n) && n > 0) numSpeakers = n;
       }
     });
 
@@ -79,6 +82,7 @@ export async function POST(req: NextRequest) {
             filePath: savePath,
             fileSizeBytes: fileSize,
             whisperModel,
+            numSpeakers,
           })
           .returning()
           .get();
