@@ -3,6 +3,7 @@ import { jobs } from "@/lib/db/schema";
 import { eq, and, lt } from "drizzle-orm";
 import { transcribeFile } from "@/lib/elevenlabs-client";
 import { logJob } from "@/lib/job-logger";
+import { condenseTranscript } from "@/lib/transcript-condenser";
 import fs from "node:fs";
 import path from "node:path";
 import { v4 as uuidv4 } from "uuid";
@@ -109,11 +110,19 @@ async function processNextJob() {
       logJob(job.id, `No audio events detected`);
     }
 
-    // ─── Save transcript ───
+    // ─── Save transcript (two files: .txt for raw text, .json for timecoded data) ───
     const transcriptDir = process.env.TRANSCRIPT_DIR || "data/transcripts";
     fs.mkdirSync(transcriptDir, { recursive: true });
-    const transcriptPath = path.join(transcriptDir, `${uuidv4()}.json`);
+    const fileId = uuidv4();
+    const transcriptTextPath = path.join(transcriptDir, `${fileId}.txt`);
+    const transcriptPath = path.join(transcriptDir, `${fileId}.json`);
 
+    // Raw text transcript
+    fs.writeFileSync(transcriptTextPath, result.text);
+    const textSize = fs.statSync(transcriptTextPath).size;
+    logJob(job.id, `Raw transcript saved (${formatBytes(textSize)})`);
+
+    // Timecoded JSON transcript
     const enrichedResult = {
       ...result,
       metadata: {
@@ -128,13 +137,14 @@ async function processNextJob() {
     };
 
     fs.writeFileSync(transcriptPath, JSON.stringify(enrichedResult, null, 2));
-    const transcriptSize = fs.statSync(transcriptPath).size;
-    logJob(job.id, `Transcript saved (${formatBytes(transcriptSize)})`);
+    const jsonSize = fs.statSync(transcriptPath).size;
+    logJob(job.id, `Timecoded transcript saved (${formatBytes(jsonSize)})`);
 
     db.update(jobs)
       .set({
         status: "completed",
         transcriptPath,
+        transcriptTextPath,
         language: result.language,
         durationSeconds: result.duration_seconds,
         processingSeconds: elapsed,
@@ -144,6 +154,15 @@ async function processNextJob() {
       .run();
 
     try { fs.unlinkSync(job.filePath); } catch { /* ignore */ }
+
+    // ─── Condense transcript into SQLite segments for search + EDL ───
+    try {
+      const segCount = await condenseTranscript(job.id, transcriptPath);
+      logJob(job.id, `Condensed ${segCount} segments into search index`);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      logJob(job.id, `Condensation failed (non-fatal): ${msg}`, "warn");
+    }
 
     logJob(job.id, `Job completed successfully`);
   } catch (error) {

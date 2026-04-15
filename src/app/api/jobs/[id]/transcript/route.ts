@@ -28,6 +28,39 @@ export async function GET(
     );
   }
 
+  const format = req.nextUrl.searchParams.get("format"); // "text" or default "json"
+  const download = req.nextUrl.searchParams.get("download") === "true";
+  const baseName = job.originalFilename.replace(/\.[^.]+$/, "");
+
+  if (format === "text") {
+    const textPath = job.transcriptTextPath;
+    if (!textPath) {
+      return NextResponse.json(
+        { error: "Raw text transcript not available" },
+        { status: 404 }
+      );
+    }
+
+    let textData: string;
+    try {
+      textData = fs.readFileSync(textPath, "utf-8");
+    } catch {
+      return NextResponse.json(
+        { error: "Text transcript file not found on disk" },
+        { status: 404 }
+      );
+    }
+
+    const headers: Record<string, string> = {
+      "Content-Type": "text/plain; charset=utf-8",
+    };
+    if (download) {
+      headers["Content-Disposition"] = `attachment; filename="${baseName}_transcript.txt"`;
+    }
+    return new NextResponse(textData, { headers });
+  }
+
+  // Default: JSON timecoded transcript
   let transcriptData: string;
   try {
     transcriptData = fs.readFileSync(job.transcriptPath, "utf-8");
@@ -38,19 +71,11 @@ export async function GET(
     );
   }
 
-  const download = req.nextUrl.searchParams.get("download") === "true";
-
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
   if (download) {
-    const baseName = job.originalFilename.replace(/\.[^.]+$/, "");
-    return new NextResponse(transcriptData, {
-      headers: {
-        "Content-Type": "application/json",
-        "Content-Disposition": `attachment; filename="${baseName}_transcript.json"`,
-      },
-    });
+    headers["Content-Disposition"] = `attachment; filename="${baseName}_transcript.json"`;
   }
-
-  return new NextResponse(transcriptData, {
-    headers: { "Content-Type": "application/json" },
-  });
+  return new NextResponse(transcriptData, { headers });
 }

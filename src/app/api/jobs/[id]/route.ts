@@ -53,6 +53,9 @@ export async function DELETE(
   if (job.transcriptPath) {
     fs.unlink(job.transcriptPath, () => {});
   }
+  if (job.transcriptTextPath) {
+    fs.unlink(job.transcriptTextPath, () => {});
+  }
 
   db.delete(jobs).where(eq(jobs.id, jobId)).run();
 
