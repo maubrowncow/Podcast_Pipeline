@@ -4,14 +4,12 @@ import { useState } from "react";
 import { WordDetail } from "./word-detail";
 
 const SPEAKER_COLORS = [
-  "text-blue-600 dark:text-blue-400",
-  "text-emerald-600 dark:text-emerald-400",
-  "text-purple-600 dark:text-purple-400",
-  "text-orange-600 dark:text-orange-400",
-  "text-pink-600 dark:text-pink-400",
-  "text-cyan-600 dark:text-cyan-400",
-  "text-yellow-600 dark:text-yellow-400",
-  "text-red-600 dark:text-red-400",
+  "text-accent-blue",
+  "text-accent-green",
+  "text-accent-yellow",
+  "text-accent-red",
+  "text-cold-grey",
+  "text-muted-foreground",
 ];
 
 interface Word {
@@ -52,25 +50,25 @@ export function SegmentRow({
   const speakerColor = SPEAKER_COLORS[speakerColorIdx % SPEAKER_COLORS.length];
 
   return (
-    <div className="border-b border-border py-3 last:border-b-0">
+    <div className="border-b border-border py-2.5 last:border-b-0">
       <div
         className="flex gap-3 cursor-pointer group"
         onClick={() => setExpanded(!expanded)}
       >
-        <span className="text-xs text-muted font-mono shrink-0 pt-0.5 w-20">
+        <span className="text-[10px] text-muted-foreground shrink-0 pt-0.5 w-20 tabular-nums tracking-[0.08em]">
           {formatTimestamp(segment.start)}
         </span>
         {segment.speaker && (
           <span
-            className={`text-xs font-medium shrink-0 pt-0.5 w-24 ${speakerColor}`}
+            className={`text-[10px] font-bold uppercase tracking-[0.14em] shrink-0 pt-0.5 w-24 ${speakerColor}`}
           >
             {segment.speaker}
           </span>
         )}
-        <p className="text-sm flex-1">
+        <p className="text-xs flex-1 leading-relaxed tracking-[0.04em]">
           {segment.text}
-          <span className="text-muted text-xs ml-2 opacity-0 group-hover:opacity-100 transition-opacity">
-            {expanded ? "▲" : "▼"} words
+          <span className="text-muted-foreground text-[10px] ml-2 opacity-0 group-hover:opacity-100 transition-opacity">
+            {expanded ? "\u25B2" : "\u25BC"}
           </span>
         </p>
       </div>

@@ -2,7 +2,9 @@
 
 import { useState, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { UploadProgress } from "./upload-progress";
+import { buttonVariants } from "@/components/ui/button";
 
 const ALLOWED_TYPES = ["mp3", "wav", "m4a", "flac", "ogg", "webm"];
 
@@ -53,7 +55,6 @@ export function UploadZone() {
             i === index ? { ...u, progress: 100, status: "done", jobId } : u
           )
         );
-        // Navigate to job page immediately
         if (jobId) {
           router.push(`/jobs/${jobId}`);
         }
@@ -82,7 +83,7 @@ export function UploadZone() {
 
     xhr.open("POST", "/api/upload");
     xhr.send(formData);
-  }, []);
+  }, [router]);
 
   const handleFiles = useCallback(
     (files: FileList | File[]) => {
@@ -139,8 +140,11 @@ export function UploadZone() {
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-4">
-        <label htmlFor="num-speakers" className="text-sm font-medium shrink-0">
-          Number of Speakers
+        <label
+          htmlFor="num-speakers"
+          className="text-[11px] font-bold uppercase tracking-[0.14em] text-muted-foreground shrink-0"
+        >
+          Speakers
         </label>
         <input
           id="num-speakers"
@@ -149,7 +153,7 @@ export function UploadZone() {
           max="32"
           value={numSpeakers}
           onChange={(e) => setNumSpeakers(e.target.value)}
-          className="border border-border rounded-lg px-3 py-1.5 text-sm bg-card text-foreground w-20"
+          className="w-16 h-8 border-b border-border bg-transparent px-0 py-1 text-sm tracking-[0.08em] outline-none focus:border-accent"
         />
       </div>
 
@@ -158,19 +162,21 @@ export function UploadZone() {
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onClick={() => fileInputRef.current?.click()}
-        className={`border-2 border-dashed rounded-xl p-12 text-center cursor-pointer transition-colors ${
+        className={`border-2 border-dashed p-16 text-center cursor-pointer transition-colors ${
           isDragging
             ? "border-accent bg-accent/5"
-            : "border-border hover:border-muted"
+            : "border-border hover:border-muted-foreground"
         }`}
       >
-        <div className="text-4xl mb-3">🎵</div>
-        <p className="text-lg font-medium mb-1">
+        <p className="text-xs font-bold uppercase tracking-[0.14em] mb-2">
           Drop audio files here or click to browse
         </p>
-        <p className="text-sm text-muted">
-          Supports {ALLOWED_TYPES.join(", ")} — up to 2GB per file
+        <p className="text-[10px] text-muted-foreground uppercase tracking-[0.14em] mb-3">
+          {ALLOWED_TYPES.join(" / ")}
         </p>
+        <span className="inline-block text-[10px] font-bold uppercase tracking-[0.14em] text-accent">
+          [ Select Files ]
+        </span>
         <input
           ref={fileInputRef}
           type="file"
@@ -186,18 +192,17 @@ export function UploadZone() {
 
       {uploads.length > 0 && (
         <div className="space-y-3">
-          <h2 className="text-sm font-medium text-muted">Uploads</h2>
+          <h2 className="text-[11px] font-bold uppercase tracking-[0.14em] text-muted-foreground">
+            Uploads
+          </h2>
           {uploads.map((upload, i) => (
             <UploadProgress key={i} upload={upload} />
           ))}
           {allDone && (
             <div className="text-center pt-4">
-              <a
-                href="/"
-                className="px-4 py-2 bg-accent text-white rounded-lg hover:bg-accent-hover transition-colors text-sm font-medium"
-              >
+              <Link href="/" className={buttonVariants()}>
                 View Dashboard
-              </a>
+              </Link>
             </div>
           )}
         </div>

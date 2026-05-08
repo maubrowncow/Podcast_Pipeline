@@ -6,10 +6,11 @@
  * module:
  *
  *  1. Converts each ms range to sequence frames.
- *  2. For each range, finds all clipitems across all tracks that overlap it
- *     (the conform step).
- *  3. Calculates the exact source in/out for each overlapping clip.
- *  4. Places the resulting clips consecutively on an output timeline.
+ *  2. For each range, finds the PRIMARY video clip (real media, not adjustment
+ *     layers or nested sequence refs) that covers the most overlap.
+ *  3. Calculates the exact source in/out for each clip.
+ *  4. Places the resulting clips consecutively on a FLAT output timeline:
+ *     one video track (V1) + two audio tracks (A1 left, A2 right).
  *  5. Emits a valid FCP7 XML (XMEML v4) for direct import into Premiere.
  */
 
@@ -22,11 +23,14 @@ export interface ColdOpenRange {
   endMs: number;
 }
 
-interface OutputClip {
-  sourceClip: SequenceClip;
-  sourceIn: number;    // frames in source file
+interface FlatClip {
+  file: SequenceFile;      // video source file
+  sourceIn: number;        // frames in video source file
   sourceOut: number;
-  timelineStart: number; // frames on output timeline
+  audioFile: SequenceFile; // audio source file (may differ from video)
+  audioSourceIn: number;   // frames in audio source file
+  audioSourceOut: number;
+  timelineStart: number;   // frames on output timeline
   timelineEnd: number;
 }
 
@@ -36,28 +40,6 @@ function escapeXml(s: string): string {
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
-}
-
-/** Find all clips across all tracks that overlap [startFrame, endFrame) */
-function conformRange(
-  model: SequenceModel,
-  startFrame: number,
-  endFrame: number
-): Array<{ clip: SequenceClip; sourceIn: number; sourceOut: number; overlapStart: number; overlapEnd: number }> {
-  const results = [];
-  for (const clip of model.clips) {
-    if (clip.sequenceEnd <= startFrame) continue;
-    if (clip.sequenceStart >= endFrame) continue;
-
-    const overlapStart = Math.max(clip.sequenceStart, startFrame);
-    const overlapEnd = Math.min(clip.sequenceEnd, endFrame);
-    const offsetIntoClip = overlapStart - clip.sequenceStart;
-    const sourceIn = clip.sourceIn + offsetIntoClip;
-    const sourceOut = sourceIn + (overlapEnd - overlapStart);
-
-    results.push({ clip, sourceIn, sourceOut, overlapStart, overlapEnd });
-  }
-  return results;
 }
 
 // ── XML building helpers ─────────────────────────────────────────────────────
@@ -79,7 +61,6 @@ function fileMediaXml(file: SequenceFile, rate: string): string {
   const fd = file.fieldDominance ?? "none";
   const depth = file.audioDepth ?? 16;
   const sr = file.audioSampleRate ?? 48000;
-  const layout = file.audioLayout ?? "stereo";
 
   return `<media>
               <video>
@@ -98,7 +79,6 @@ function fileMediaXml(file: SequenceFile, rate: string): string {
                   <samplerate>${sr}</samplerate>
                 </samplecharacteristics>
                 <channelcount>1</channelcount>
-                <layout>${escapeXml(layout)}</layout>
                 <audiochannel>
                   <sourcechannel>1</sourcechannel>
                   <channellabel>left</channellabel>
@@ -110,7 +90,6 @@ function fileMediaXml(file: SequenceFile, rate: string): string {
                   <samplerate>${sr}</samplerate>
                 </samplecharacteristics>
                 <channelcount>1</channelcount>
-                <layout>${escapeXml(layout)}</layout>
                 <audiochannel>
                   <sourcechannel>2</sourcechannel>
                   <channellabel>right</channellabel>
@@ -130,19 +109,72 @@ function fullFileXml(file: SequenceFile, rate: string): string {
             </file>`;
 }
 
+/**
+ * Find the best real-media clip of a given type that overlaps [startFrame, endFrame).
+ * Skips: disabled clips, empty fileId, files not in model (adjustment layers),
+ * nested sequence refs. Returns the clip with the largest overlap.
+ */
+function findPrimaryClip(
+  model: SequenceModel,
+  startFrame: number,
+  endFrame: number,
+  trackType: "video" | "audio"
+): { clip: SequenceClip; overlapStart: number; overlapEnd: number } | null {
+  let best: { clip: SequenceClip; overlapStart: number; overlapEnd: number } | null = null;
+  let bestOverlap = 0;
+
+  for (const clip of model.clips) {
+    if (!clip.enabled) continue;
+    if (clip.trackType !== trackType) continue;
+    if (!clip.fileId) continue;
+    if (!model.files[clip.fileId]) continue;
+    if (clip.sequenceEnd <= startFrame) continue;
+    if (clip.sequenceStart >= endFrame) continue;
+
+    const overlapStart = Math.max(clip.sequenceStart, startFrame);
+    const overlapEnd = Math.min(clip.sequenceEnd, endFrame);
+    const overlap = overlapEnd - overlapStart;
+
+    if (overlap > bestOverlap) {
+      bestOverlap = overlap;
+      best = { clip, overlapStart, overlapEnd };
+    }
+  }
+
+  return best;
+}
+
 // ── Main assembler ───────────────────────────────────────────────────────────
+
+/**
+ * Compute the source-frame offset for a file: the difference between a clip's
+ * sourceIn and its sequenceStart. This lets us convert any timeline frame to
+ * the corresponding frame in a specific source file.
+ */
+function computeFileOffset(model: SequenceModel, fileId: string): number {
+  for (const clip of model.clips) {
+    if (clip.fileId === fileId && clip.enabled) {
+      return clip.sourceIn - clip.sequenceStart;
+    }
+  }
+  return 0;
+}
 
 export function assembleColdOpen(
   model: SequenceModel,
   ranges: ColdOpenRange[],
-  outputSequenceName = "Cold Open"
+  outputSequenceName = "Cold Open",
+  audioFileId?: string
 ): string {
   const { timebase, ntsc } = model;
   const rate = rateXml(timebase, ntsc);
 
-  // ── Collect all output clips and track the total timeline duration ─────────
-  const outputClips: OutputClip[] = [];
-  const referencedFileIds = new Set<string>();
+  // If explicit audioFileId override, resolve it once
+  const audioOverrideFile = audioFileId ? model.files[audioFileId] : null;
+  const audioOverrideOffset = audioFileId ? computeFileOffset(model, audioFileId) : 0;
+
+  // ── For each range, find the primary video + audio clips ──────────────────
+  const outputClips: FlatClip[] = [];
   let timelineCursor = 0;
 
   for (const range of ranges) {
@@ -151,126 +183,124 @@ export function assembleColdOpen(
     const slabDuration = endFrame - startFrame;
     if (slabDuration <= 0) continue;
 
-    const conformed = conformRange(model, startFrame, endFrame);
+    const match = findPrimaryClip(model, startFrame, endFrame, "video");
+    if (!match) continue;
 
-    for (const { clip, sourceIn, sourceOut, overlapStart, overlapEnd } of conformed) {
-      const clipDuration = overlapEnd - overlapStart;
-      outputClips.push({
-        sourceClip: clip,
-        sourceIn,
-        sourceOut,
-        timelineStart: timelineCursor + (overlapStart - startFrame),
-        timelineEnd: timelineCursor + (overlapStart - startFrame) + clipDuration,
-      });
-      if (clip.fileId) referencedFileIds.add(clip.fileId);
+    const { clip, overlapStart, overlapEnd } = match;
+    const file = model.files[clip.fileId];
+
+    const offsetIntoClip = overlapStart - clip.sequenceStart;
+    const sourceIn = clip.sourceIn + offsetIntoClip;
+    const clipDuration = overlapEnd - overlapStart;
+    const sourceOut = sourceIn + clipDuration;
+
+    // Audio: explicit override > source audio tracks > video file fallback
+    let aFile: SequenceFile;
+    let audioSourceIn: number;
+    let audioSourceOut: number;
+
+    if (audioOverrideFile) {
+      // User explicitly chose a file for all audio
+      aFile = audioOverrideFile;
+      audioSourceIn = overlapStart + audioOverrideOffset;
+      audioSourceOut = audioSourceIn + clipDuration;
+    } else {
+      // Look at what audio clip the source edit uses at this timeline position
+      const audioMatch = findPrimaryClip(model, overlapStart, overlapEnd, "audio");
+      if (audioMatch) {
+        const audioClip = audioMatch.clip;
+        aFile = model.files[audioClip.fileId];
+        const audioOffset = audioMatch.overlapStart - audioClip.sequenceStart;
+        audioSourceIn = audioClip.sourceIn + audioOffset;
+        audioSourceOut = audioSourceIn + clipDuration;
+      } else {
+        // No audio track clip found — fall back to video file
+        aFile = file;
+        audioSourceIn = sourceIn;
+        audioSourceOut = sourceOut;
+      }
     }
 
-    timelineCursor += slabDuration;
+    outputClips.push({
+      file,
+      sourceIn,
+      sourceOut,
+      audioFile: aFile,
+      audioSourceIn,
+      audioSourceOut,
+      timelineStart: timelineCursor,
+      timelineEnd: timelineCursor + clipDuration,
+    });
+
+    timelineCursor += clipDuration;
   }
 
   const totalDuration = timelineCursor;
 
-  // ── Group output clips by track ───────────────────────────────────────────
-  const trackMap = new Map<string, OutputClip[]>();
-  for (const oc of outputClips) {
-    const key = `${oc.sourceClip.trackType}-${oc.sourceClip.trackIndex}`;
-    if (!trackMap.has(key)) trackMap.set(key, []);
-    trackMap.get(key)!.push(oc);
-  }
-
-  const videoTrackIndices = [...trackMap.keys()]
-    .filter(k => k.startsWith("video"))
-    .map(k => parseInt(k.split("-")[1]))
-    .sort((a, b) => a - b);
-  const audioTrackIndices = [...trackMap.keys()]
-    .filter(k => k.startsWith("audio"))
-    .map(k => parseInt(k.split("-")[1]))
-    .sort((a, b) => a - b);
-
-  // Track which file ids have been emitted inline (first = full, rest = ref)
-  const emittedFileIds = new Set<string>();
-
-  // Unique clip ID counter
-  let clipIdCounter = 1;
-
-  // ── Video characteristics from source model or first file ─────────────────
+  // ── Video characteristics from first file ─────────────────────────────────
   const firstFile = Object.values(model.files)[0];
   const seqWidth = firstFile?.videoWidth ?? 3840;
   const seqHeight = firstFile?.videoHeight ?? 2160;
 
-  // ── Build clipitem XML for a track ────────────────────────────────────────
-  function buildClipItem(oc: OutputClip, trackType: "video" | "audio", audioTrackIdx?: number): string {
-    const { sourceClip, sourceIn, sourceOut, timelineStart, timelineEnd } = oc;
-    const file = model.files[sourceClip.fileId];
-    const clipId = `clipitem-${clipIdCounter++}`;
-    const fileDuration = file?.durationFrames ?? (sourceOut - sourceIn);
+  // Track which files have been fully defined (first = inline, rest = ref)
+  const emittedFileIds = new Set<string>();
+  let clipIdCounter = 1;
 
-    // First reference = full inline definition, subsequent = self-closing ref
-    let fileRef: string;
-    if (file && !emittedFileIds.has(file.id)) {
+  function fileRefXml(file: SequenceFile): string {
+    if (!emittedFileIds.has(file.id)) {
       emittedFileIds.add(file.id);
-      fileRef = fullFileXml(file, rate);
-    } else {
-      fileRef = `<file id="${escapeXml(sourceClip.fileId)}"/>`;
+      return fullFileXml(file, rate);
     }
-
-    const lines = [
-      `          <clipitem id="${clipId}">`,
-      `            <masterclipid>masterclip-${escapeXml(sourceClip.fileId)}</masterclipid>`,
-      `            <name>${escapeXml(sourceClip.name)}</name>`,
-      `            <enabled>TRUE</enabled>`,
-      `            <duration>${fileDuration}</duration>`,
-      `            ${rate}`,
-      `            <start>${timelineStart}</start>`,
-      `            <end>${timelineEnd}</end>`,
-      `            <in>${sourceIn}</in>`,
-      `            <out>${sourceOut}</out>`,
-    ];
-
-    if (trackType === "video") {
-      lines.push(`            <alphatype>none</alphatype>`);
-      lines.push(`            <pixelaspectratio>square</pixelaspectratio>`);
-      lines.push(`            <anamorphic>FALSE</anamorphic>`);
-    }
-
-    if (trackType === "audio" && audioTrackIdx !== undefined) {
-      lines.push(`            <sourcetrack>`);
-      lines.push(`              <mediatype>audio</mediatype>`);
-      lines.push(`              <trackindex>${audioTrackIdx + 1}</trackindex>`);
-      lines.push(`            </sourcetrack>`);
-    }
-
-    lines.push(`            ${fileRef}`);
-    lines.push(`            <logginginfo><description></description><scene></scene><shottake></shottake><lognote></lognote><good></good></logginginfo>`);
-    lines.push(`          </clipitem>`);
-
-    return lines.join("\n");
+    return `<file id="${escapeXml(file.id)}"/>`;
   }
 
-  // ── Emit video tracks ─────────────────────────────────────────────────────
-  const maxVideoIdx = videoTrackIndices.length > 0 ? Math.max(...videoTrackIndices) : 0;
-  const videoTrackXml = Array.from({ length: maxVideoIdx + 1 }, (_, i) => {
-    const clips = trackMap.get(`video-${i}`) ?? [];
-    const clipXml = clips.map(oc => buildClipItem(oc, "video")).join("\n");
-    return `        <track>
-${clipXml}
-          <enabled>TRUE</enabled>
-          <locked>FALSE</locked>
-        </track>`;
+  // ── Build V1 clipitems ────────────────────────────────────────────────────
+  const videoClipItems = outputClips.map(oc => {
+    const id = `clipitem-${clipIdCounter++}`;
+    return `          <clipitem id="${id}">
+            <masterclipid>masterclip-${escapeXml(oc.file.id)}</masterclipid>
+            <name>${escapeXml(oc.file.name)}</name>
+            <enabled>TRUE</enabled>
+            <duration>${oc.file.durationFrames}</duration>
+            ${rate}
+            <start>${oc.timelineStart}</start>
+            <end>${oc.timelineEnd}</end>
+            <in>${oc.sourceIn}</in>
+            <out>${oc.sourceOut}</out>
+            <alphatype>none</alphatype>
+            <pixelaspectratio>square</pixelaspectratio>
+            <anamorphic>FALSE</anamorphic>
+            ${fileRefXml(oc.file)}
+            <logginginfo><description></description><scene></scene><shottake></shottake><lognote></lognote><good></good></logginginfo>
+          </clipitem>`;
   }).join("\n");
 
-  // ── Emit audio tracks ─────────────────────────────────────────────────────
-  const maxAudioIdx = audioTrackIndices.length > 0 ? Math.max(...audioTrackIndices) : 0;
-  const audioTrackXml = Array.from({ length: maxAudioIdx + 1 }, (_, i) => {
-    const clips = trackMap.get(`audio-${i}`) ?? [];
-    const clipXml = clips.map(oc => buildClipItem(oc, "audio", i)).join("\n");
-    return `        <track>
-${clipXml}
-          <enabled>TRUE</enabled>
-          <locked>FALSE</locked>
-          <outputchannelindex>${i + 1}</outputchannelindex>
-        </track>`;
-  }).join("\n");
+  // ── Build A1 (left) and A2 (right) clipitems ─────────────────────────────
+  function audioClipItems(channelIndex: number): string {
+    return outputClips.map(oc => {
+      const id = `clipitem-${clipIdCounter++}`;
+      return `          <clipitem id="${id}">
+            <masterclipid>masterclip-${escapeXml(oc.audioFile.id)}</masterclipid>
+            <name>${escapeXml(oc.audioFile.name)}</name>
+            <enabled>TRUE</enabled>
+            <duration>${oc.audioFile.durationFrames}</duration>
+            ${rate}
+            <start>${oc.timelineStart}</start>
+            <end>${oc.timelineEnd}</end>
+            <in>${oc.audioSourceIn}</in>
+            <out>${oc.audioSourceOut}</out>
+            <sourcetrack>
+              <mediatype>audio</mediatype>
+              <trackindex>${channelIndex}</trackindex>
+            </sourcetrack>
+            ${fileRefXml(oc.audioFile)}
+            <logginginfo><description></description><scene></scene><shottake></shottake><lognote></lognote><good></good></logginginfo>
+          </clipitem>`;
+    }).join("\n");
+  }
+
+  const audioTrack1 = audioClipItems(1);
+  const audioTrack2 = audioClipItems(2);
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE xmeml>
@@ -298,7 +328,11 @@ ${clipXml}
             <colordepth>24</colordepth>
           </samplecharacteristics>
         </format>
-${videoTrackXml}
+        <track>
+${videoClipItems}
+          <enabled>TRUE</enabled>
+          <locked>FALSE</locked>
+        </track>
       </video>
       <audio>
         <numOutputChannels>2</numOutputChannels>
@@ -308,7 +342,18 @@ ${videoTrackXml}
             <samplerate>48000</samplerate>
           </samplecharacteristics>
         </format>
-${audioTrackXml}
+        <track>
+${audioTrack1}
+          <enabled>TRUE</enabled>
+          <locked>FALSE</locked>
+          <outputchannelindex>1</outputchannelindex>
+        </track>
+        <track>
+${audioTrack2}
+          <enabled>TRUE</enabled>
+          <locked>FALSE</locked>
+          <outputchannelindex>2</outputchannelindex>
+        </track>
       </audio>
     </media>
   </sequence>

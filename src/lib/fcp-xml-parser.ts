@@ -31,6 +31,7 @@ export interface SequenceFile {
 export interface SequenceClip {
   id: string;
   name: string;
+  enabled: boolean;
   trackType: "video" | "audio";
   trackIndex: number;       // 0-based
   // all in frames, relative to sequence start (frame 0)
@@ -203,9 +204,12 @@ export function parseFCPXML(xmlString: string): SequenceModel {
           fileId = String((fileEl[0] as Record<string, unknown>)["@_id"] ?? "");
         }
 
+        const enabled = String(c.enabled ?? "TRUE").toUpperCase() === "TRUE";
+
         clips.push({
           id: String((c as Record<string, unknown>)["@_id"] ?? `clip-${clips.length}`),
           name: String(c.name ?? ""),
+          enabled,
           trackType,
           trackIndex: startIndex + idx,
           sequenceStart: seqStart,

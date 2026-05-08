@@ -1,16 +1,20 @@
+import Link from "next/link";
 import { JobList } from "@/components/job-list";
+import { buttonVariants } from "@/components/ui/button-variants";
 
 export default function DashboardPage() {
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-semibold">Transcription Jobs</h1>
-        <a
+      <div className="flex items-center justify-between mb-8">
+        <h1 className="text-xs font-bold uppercase tracking-[0.14em]">
+          Transcription Jobs
+        </h1>
+        <Link
           href="/upload"
-          className="px-4 py-2 bg-accent text-white rounded-lg hover:bg-accent-hover transition-colors text-sm font-medium"
+          className={buttonVariants({ variant: "default", size: "sm" })}
         >
           Upload Audio
-        </a>
+        </Link>
       </div>
       <JobList />
     </div>

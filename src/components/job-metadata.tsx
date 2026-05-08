@@ -32,39 +32,51 @@ export function JobMetadata({ job }: { job: JobData }) {
       : null;
 
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm">
+    <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
       <div>
-        <span className="text-muted block text-xs">Filename</span>
-        <span className="font-medium truncate block">{job.originalFilename}</span>
+        <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground block mb-0.5">
+          Filename
+        </span>
+        <span className="text-xs tracking-[0.08em] truncate block">{job.originalFilename}</span>
       </div>
       {job.language && (
         <div>
-          <span className="text-muted block text-xs">Language</span>
-          <span className="font-medium">{job.language}</span>
+          <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground block mb-0.5">
+            Language
+          </span>
+          <span className="text-xs tracking-[0.08em]">{job.language}</span>
         </div>
       )}
       {job.durationSeconds != null && (
         <div>
-          <span className="text-muted block text-xs">Duration</span>
-          <span className="font-medium">{formatDuration(job.durationSeconds)}</span>
+          <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground block mb-0.5">
+            Duration
+          </span>
+          <span className="text-xs tracking-[0.08em]">{formatDuration(job.durationSeconds)}</span>
         </div>
       )}
       {job.processingSeconds != null && (
         <div>
-          <span className="text-muted block text-xs">Processing Time</span>
-          <span className="font-medium">{formatDuration(job.processingSeconds)}</span>
+          <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground block mb-0.5">
+            Processing
+          </span>
+          <span className="text-xs tracking-[0.08em]">{formatDuration(job.processingSeconds)}</span>
         </div>
       )}
       {realtimeFactor && (
         <div>
-          <span className="text-muted block text-xs">Realtime Factor</span>
-          <span className="font-medium">{realtimeFactor}x</span>
+          <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground block mb-0.5">
+            RT Factor
+          </span>
+          <span className="text-xs tracking-[0.08em]">{realtimeFactor}x</span>
         </div>
       )}
       {job.fileSizeBytes != null && (
         <div>
-          <span className="text-muted block text-xs">File Size</span>
-          <span className="font-medium">{formatFileSize(job.fileSizeBytes)}</span>
+          <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground block mb-0.5">
+            File Size
+          </span>
+          <span className="text-xs tracking-[0.08em]">{formatFileSize(job.fileSizeBytes)}</span>
         </div>
       )}
     </div>

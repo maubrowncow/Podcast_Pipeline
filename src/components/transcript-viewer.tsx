@@ -50,11 +50,18 @@ export function TranscriptViewer({ jobId }: { jobId: number }) {
     load();
   }, [jobId]);
 
-  if (loading) return <p className="text-muted text-sm">Loading transcript...</p>;
-  if (error) return <p className="text-error text-sm">{error}</p>;
+  if (loading)
+    return (
+      <p className="text-[10px] text-muted-foreground uppercase tracking-[0.14em]">
+        Loading transcript...
+      </p>
+    );
+  if (error)
+    return (
+      <p className="text-[10px] text-error uppercase tracking-[0.14em]">{error}</p>
+    );
   if (!transcript) return null;
 
-  // Build speaker index for consistent coloring
   const speakerIndex = new Map<string, number>();
   let speakerCount = 0;
   for (const seg of transcript.segments) {
@@ -67,21 +74,25 @@ export function TranscriptViewer({ jobId }: { jobId: number }) {
     <div>
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
-          <h2 className="text-lg font-semibold">Transcript</h2>
-          <span className="text-xs text-muted">
+          <h2 className="text-xs font-bold uppercase tracking-[0.14em] flex items-center gap-2">
+            <span className="inline-block w-2 h-2 bg-accent-green" />
+            Transcript
+          </h2>
+          <span className="text-[10px] text-muted-foreground uppercase tracking-[0.14em]">
             {transcript.segments.length} segments
-            {speakerCount > 0 && ` · ${speakerCount} speakers`}
+            {speakerCount > 0 && ` \u00B7 ${speakerCount} speakers`}
           </span>
         </div>
         <a
           href={`/api/jobs/${jobId}/transcript?download=true`}
-          className="px-3 py-1.5 text-sm border border-border rounded-lg hover:bg-card transition-colors"
+          data-slot="bracket-btn"
+          className="text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground hover:text-accent transition-colors"
         >
-          Download JSON
+          JSON
         </a>
       </div>
 
-      <div className="border border-border rounded-lg bg-card p-4">
+      <div className="border border-border bg-card p-4">
         {transcript.segments.map((segment, i) => (
           <SegmentRow key={i} segment={segment} speakerIndex={speakerIndex} />
         ))}

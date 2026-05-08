@@ -2,6 +2,11 @@
 
 import { useEffect, useState, useRef } from "react";
 
+interface SequenceFileInfo {
+  id: string;
+  name: string;
+}
+
 interface SequenceInfo {
   sequenceName: string;
   timebase: number;
@@ -9,6 +14,7 @@ interface SequenceInfo {
   durationFrames: number;
   tracks: { video: number; audio: number };
   clipCount: number;
+  files?: SequenceFileInfo[];
 }
 
 interface ColdOpenQuote {
@@ -25,6 +31,7 @@ interface ColdOpenVariation {
   hook: string;
   quotes: ColdOpenQuote[];
   openLoop: string;
+  totalWordCount?: number;
   totalEstimatedSeconds: number;
 }
 
@@ -32,7 +39,6 @@ interface ColdOpenScript {
   variations: ColdOpenVariation[];
 }
 
-// Legacy single-script format (backward compat)
 interface LegacyScript {
   hook: string;
   quotes: Array<{ text: string; reason: string }>;
@@ -44,19 +50,19 @@ function isLegacyScript(s: unknown): s is LegacyScript {
 }
 
 const EMOTION_COLORS: Record<string, string> = {
-  surprise: "text-amber-400",
-  vulnerability: "text-rose-400",
-  curiosity: "text-sky-400",
-  humor: "text-emerald-400",
-  controversy: "text-orange-400",
-  conviction: "text-violet-400",
-  unknown: "text-muted",
+  surprise: "text-accent-yellow",
+  vulnerability: "text-accent-red",
+  curiosity: "text-accent-blue",
+  humor: "text-accent-green",
+  controversy: "text-accent-red",
+  conviction: "text-cold-grey",
+  unknown: "text-muted-foreground",
 };
 
-const STRATEGY_COLORS: Record<string, string> = {
-  hot_take: "border-orange-400",
-  vulnerable_moment: "border-rose-400",
-  mystery: "border-sky-400",
+const STRATEGY_BORDER: Record<string, string> = {
+  hot_take: "border-accent-red",
+  vulnerable_moment: "border-accent-red",
+  mystery: "border-accent-blue",
   classic: "border-border",
 };
 
@@ -68,9 +74,10 @@ export function ColdOpenSuite({ jobId }: { jobId: number }) {
   const [error, setError] = useState<string | null>(null);
   const [sequenceName, setSequenceName] = useState("Cold Open");
   const [confirmRegenerate, setConfirmRegenerate] = useState(false);
+  const [direction, setDirection] = useState("");
+  const [audioFileId, setAudioFileId] = useState<string>("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Load existing sequence + script on mount
   useEffect(() => {
     fetch(`/api/jobs/${jobId}/premiere-xml`)
       .then(r => r.json())
@@ -81,7 +88,6 @@ export function ColdOpenSuite({ jobId }: { jobId: number }) {
       .then(r => r.json())
       .then(d => {
         if (d.script) {
-          // Handle both legacy and new format
           if (isLegacyScript(d.script)) {
             setScript({
               variations: [{
@@ -143,7 +149,11 @@ export function ColdOpenSuite({ jobId }: { jobId: number }) {
     setScript(null);
     setSelectedIndex(0);
     try {
-      const res = await fetch(`/api/jobs/${jobId}/cold-open`, { method: "POST" });
+      const res = await fetch(`/api/jobs/${jobId}/cold-open`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ direction: direction.trim() || undefined }),
+      });
       const data = await res.json();
       if (!res.ok) { setError(data.error ?? "Generation failed"); return; }
       setScript(data.script);
@@ -156,12 +166,11 @@ export function ColdOpenSuite({ jobId }: { jobId: number }) {
 
   async function handleSelectVariation(index: number) {
     setSelectedIndex(index);
-    // Persist selection server-side
     fetch(`/api/jobs/${jobId}/cold-open/select`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ index }),
-    }).catch(() => {}); // non-blocking
+    }).catch(() => {});
   }
 
   async function handleDownloadXml() {
@@ -181,7 +190,8 @@ export function ColdOpenSuite({ jobId }: { jobId: number }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           quotes: allQuotes,
-          sequenceName: `${sequenceName} — ${variation.strategyLabel}`,
+          sequenceName: `${sequenceName} \u2014 ${variation.strategyLabel}`,
+          audioFileId: audioFileId || undefined,
         }),
       });
       if (!res.ok) {
@@ -210,38 +220,50 @@ export function ColdOpenSuite({ jobId }: { jobId: number }) {
   return (
     <div>
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-semibold">Cold Open</h2>
+        <h2 className="text-xs font-bold uppercase tracking-[0.14em] flex items-center gap-2">
+          <span className="inline-block w-2 h-2 bg-accent-red" />
+          Cold Open
+        </h2>
         {currentVariation && (
-          <span className="text-xs text-muted">
-            ~{currentVariation.totalEstimatedSeconds}s · {1 + currentVariation.quotes.length} quotes
+          <span className="text-[10px] text-muted-foreground uppercase tracking-[0.14em]">
+            ~{currentVariation.totalEstimatedSeconds}s &middot; {currentVariation.totalWordCount ?? "?"} words &middot; {1 + currentVariation.quotes.length} quotes
           </span>
         )}
       </div>
 
-      {/* Step 1 — Upload Premiere XML */}
-      <div className="border border-border rounded-lg bg-card p-4 mb-3">
+      {/* Step 1 */}
+      <div className="border border-border bg-card p-4 mb-2">
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-sm font-medium">
-              {sequence ? "Premiere sequence loaded" : "Step 1 — Upload Premiere XML"}
+            <p className="text-[11px] font-bold uppercase tracking-[0.14em]">
+              {sequence ? "Sequence Loaded" : "Step 1 \u2014 Upload XML"}
             </p>
             {sequence ? (
-              <p className="text-xs text-muted mt-0.5">
-                {sequence.sequenceName} · {sequence.timebase}{sequence.ntsc ? "/0.97" : ""} fps ·
-                V{sequence.tracks.video} A{sequence.tracks.audio} · {sequence.clipCount} clips
+              <p className="text-[10px] text-muted-foreground tracking-[0.08em] mt-0.5">
+                {sequence.sequenceName} &middot; {sequence.timebase}{sequence.ntsc ? "/0.97" : ""} fps &middot;
+                V{sequence.tracks.video} A{sequence.tracks.audio} &middot; {sequence.clipCount} clips
               </p>
             ) : (
-              <p className="text-xs text-muted mt-0.5">
-                File &rarr; Export &rarr; Final Cut Pro XML from your Premiere edit
+              <p className="text-[10px] text-muted-foreground tracking-[0.08em] mt-0.5">
+                File &rarr; Export &rarr; Final Cut Pro XML
               </p>
             )}
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
             {sequence && (
-              <span className="text-xs text-emerald-400">&check; ready</span>
+              <span className="text-[10px] font-bold text-accent-green uppercase tracking-[0.14em]">
+                Ready
+              </span>
             )}
-            <label className={`px-3 py-1.5 text-xs border border-border rounded-lg cursor-pointer transition-colors ${busy ? "opacity-50 pointer-events-none" : "hover:bg-muted/10"}`}>
-              {status === "uploading" ? "Uploading\u2026" : sequence ? "Replace" : "Upload XML"}
+            <label
+              data-slot="bracket-btn"
+              className={`text-[10px] font-bold uppercase tracking-[0.14em] cursor-pointer transition-colors ${
+                busy
+                  ? "opacity-40 pointer-events-none text-muted-foreground"
+                  : "text-muted-foreground hover:text-accent"
+              }`}
+            >
+              {status === "uploading" ? "Uploading\u2026" : sequence ? "Replace" : "Upload"}
               <input
                 ref={fileInputRef}
                 type="file"
@@ -255,97 +277,117 @@ export function ColdOpenSuite({ jobId }: { jobId: number }) {
         </div>
       </div>
 
-      {/* Step 2 — Generate cold open */}
-      <div className="border border-border rounded-lg bg-card p-4 mb-3">
+      {/* Step 2 */}
+      <div className="border border-border bg-card p-4 mb-2">
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-sm font-medium">Step 2 — Generate cold open scripts</p>
-            <p className="text-xs text-muted mt-0.5">
-              Creates 3 variations with different emotional strategies
+            <p className="text-[11px] font-bold uppercase tracking-[0.14em]">
+              Step 2 &mdash; Generate Scripts
+            </p>
+            <p className="text-[10px] text-muted-foreground tracking-[0.08em] mt-0.5">
+              3 variations with different emotional strategies
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
             {confirmRegenerate && (
-              <span className="text-xs text-amber-400">Replace current? Click again to confirm</span>
+              <span className="text-[10px] font-bold text-accent-yellow uppercase tracking-[0.14em]">
+                Confirm?
+              </span>
             )}
             <button
               onClick={handleGenerateColdOpen}
               disabled={busy}
-              className={`px-3 py-1.5 text-xs border rounded-lg transition-colors disabled:opacity-50 ${
+              data-slot="bracket-btn"
+              className={`text-[10px] font-bold uppercase tracking-[0.14em] transition-colors disabled:opacity-40 ${
                 confirmRegenerate
-                  ? "border-amber-400 text-amber-400 hover:bg-amber-400/10"
-                  : "border-border hover:bg-muted/10"
+                  ? "text-accent-yellow hover:text-accent"
+                  : "text-muted-foreground hover:text-accent"
               }`}
             >
               {status === "generating"
-                ? "Generating 3 variations\u2026"
+                ? "Generating\u2026"
                 : script
                   ? "Regenerate"
                   : "Generate"}
             </button>
           </div>
         </div>
+        <textarea
+          value={direction}
+          onChange={e => setDirection(e.target.value)}
+          placeholder="Optional direction — e.g. &quot;focus on the AI angle&quot;"
+          rows={2}
+          className="mt-3 w-full bg-transparent border-b border-border px-0 py-2 text-xs tracking-[0.08em] resize-none outline-none focus:border-accent placeholder:text-muted-foreground placeholder:uppercase placeholder:tracking-[0.14em] placeholder:text-[10px]"
+        />
       </div>
 
-      {/* Variation tabs + preview */}
+      {/* Variation tabs */}
       {script && script.variations.length > 0 && (
         <>
-          {/* Tab bar */}
           {script.variations.length > 1 && (
-            <div className="flex gap-1 mb-3">
+            <div className="flex gap-1 mb-2">
               {script.variations.map((v, i) => (
                 <button
                   key={i}
                   onClick={() => handleSelectVariation(i)}
-                  className={`flex-1 px-3 py-2 text-xs rounded-lg border transition-colors ${
+                  className={`flex-1 px-3 py-2.5 text-[10px] uppercase tracking-[0.14em] border-2 transition-colors ${
                     i === selectedIndex
-                      ? `${STRATEGY_COLORS[v.strategy] ?? "border-border"} bg-card`
-                      : "border-transparent text-muted hover:text-foreground hover:bg-card/50"
+                      ? `${STRATEGY_BORDER[v.strategy] ?? "border-border"} bg-card font-bold text-foreground`
+                      : "border-border text-muted-foreground hover:text-foreground hover:bg-card"
                   }`}
                 >
-                  <span className="font-medium">{v.strategyLabel}</span>
-                  <span className="block text-muted mt-0.5">~{v.totalEstimatedSeconds}s</span>
+                  <span className="font-bold block">{v.strategyLabel}</span>
+                  <span className="text-muted-foreground block mt-0.5">~{v.totalEstimatedSeconds}s</span>
                 </button>
               ))}
             </div>
           )}
 
-          {/* Selected variation preview */}
+          {/* Selected variation */}
           {currentVariation && (
-            <div className="border border-border rounded-lg bg-card p-4 mb-3 space-y-3">
-              {/* Story shape label */}
-              <div className="flex items-center gap-2 text-xs text-muted">
-                <span>Story shape: {currentVariation.storyShape.replace(/_/g, " ")}</span>
+            <div className="border border-border bg-card p-4 mb-2 space-y-3">
+              <div className="text-[10px] text-muted-foreground uppercase tracking-[0.14em] font-bold">
+                Shape: {currentVariation.storyShape.replace(/_/g, " ")}
               </div>
 
               {/* Hook */}
-              <div className="border-l-2 border-amber-400 pl-3">
-                <p className="text-xs font-medium mb-1">
-                  <span className="text-amber-400">HOOK</span>
-                  <span className="text-muted ml-2">pattern interrupt</span>
+              <div className="border-l-2 border-accent-yellow pl-3">
+                <p className="text-[10px] font-bold uppercase tracking-[0.14em] mb-1">
+                  <span className="text-accent-yellow">Hook</span>
+                  <span className="text-muted-foreground ml-2">pattern interrupt</span>
                 </p>
-                <p className="text-sm">&ldquo;{currentVariation.hook}&rdquo;</p>
+                <p className="text-xs tracking-[0.04em] leading-relaxed">
+                  &ldquo;{currentVariation.hook}&rdquo;
+                </p>
               </div>
 
               {/* Quotes */}
               {currentVariation.quotes.map((q, i) => (
                 <div key={i} className="border-l-2 border-border pl-3">
-                  <p className="text-xs font-medium mb-1">
-                    <span className="text-muted uppercase">{q.beat.replace(/_/g, " ")}</span>
-                    <span className={`ml-2 ${EMOTION_COLORS[q.emotion] ?? "text-muted"}`}>
+                  <p className="text-[10px] font-bold uppercase tracking-[0.14em] mb-1">
+                    <span className="text-muted-foreground">{q.beat.replace(/_/g, " ")}</span>
+                    <span className={`ml-2 ${EMOTION_COLORS[q.emotion] ?? "text-muted-foreground"}`}>
                       {q.emotion}
                     </span>
                   </p>
-                  <p className="text-sm">&ldquo;{q.text}&rdquo;</p>
-                  <p className="text-xs text-muted mt-1">{q.reason}</p>
+                  <p className="text-xs tracking-[0.04em] leading-relaxed">
+                    &ldquo;{q.text}&rdquo;
+                  </p>
+                  <p className="text-[10px] text-muted-foreground mt-1 italic tracking-[0.04em]">
+                    {q.reason}
+                  </p>
                 </div>
               ))}
 
-              {/* Open loop description */}
+              {/* Open loop */}
               {currentVariation.openLoop && (
-                <div className="border-l-2 border-sky-400/50 pl-3">
-                  <p className="text-xs text-sky-400 font-medium mb-1">OPEN LOOP</p>
-                  <p className="text-xs text-muted">{currentVariation.openLoop}</p>
+                <div className="border-l-2 border-accent-blue pl-3">
+                  <p className="text-[10px] font-bold text-accent-blue uppercase tracking-[0.14em] mb-1">
+                    Open Loop
+                  </p>
+                  <p className="text-[10px] text-muted-foreground tracking-[0.04em]">
+                    {currentVariation.openLoop}
+                  </p>
                 </div>
               )}
             </div>
@@ -353,39 +395,59 @@ export function ColdOpenSuite({ jobId }: { jobId: number }) {
         </>
       )}
 
-      {/* Step 3 — Export XML */}
+      {/* Step 3 */}
       {script && (
-        <div className="border border-border rounded-lg bg-card p-4">
+        <div className="border border-border bg-card p-4">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-3 flex-1">
-              <p className="text-sm font-medium whitespace-nowrap">Step 3 — Export Premiere XML</p>
+              <p className="text-[11px] font-bold uppercase tracking-[0.14em] whitespace-nowrap">
+                Step 3 &mdash; Export
+              </p>
               <input
                 type="text"
                 value={sequenceName}
                 onChange={e => setSequenceName(e.target.value)}
                 placeholder="Sequence name"
-                className="flex-1 px-2 py-1 text-xs bg-transparent border border-border rounded focus:outline-none focus:ring-1 focus:ring-border"
+                className="flex-1 border-b border-border bg-transparent px-0 py-1 text-xs tracking-[0.08em] outline-none focus:border-accent"
               />
             </div>
             <button
               onClick={handleDownloadXml}
               disabled={busy || !sequence}
-              className="px-3 py-1.5 text-xs border border-border rounded-lg hover:bg-muted/10 transition-colors disabled:opacity-50 whitespace-nowrap"
+              data-slot="bracket-btn"
+              className="text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground hover:text-accent transition-colors disabled:opacity-40 whitespace-nowrap"
               title={!sequence ? "Upload Premiere XML first" : ""}
             >
               {status === "downloading" ? "Building\u2026" : "Download XML"}
             </button>
           </div>
+          {sequence?.files && sequence.files.length > 0 && (
+            <div className="flex items-center gap-2 mt-3">
+              <label className="text-[10px] text-muted-foreground uppercase tracking-[0.14em] font-bold whitespace-nowrap">
+                Audio:
+              </label>
+              <select
+                value={audioFileId}
+                onChange={e => setAudioFileId(e.target.value)}
+                className="flex-1 border-b border-border bg-transparent px-0 py-1 text-xs tracking-[0.08em] outline-none focus:border-accent"
+              >
+                <option value="">Source edit audio</option>
+                {sequence.files.map(f => (
+                  <option key={f.id} value={f.id}>{f.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
           {!sequence && (
-            <p className="text-xs text-amber-400 mt-2">
-              Upload the Premiere XML (Step 1) to enable export
+            <p className="text-[10px] text-accent-yellow font-bold uppercase tracking-[0.14em] mt-2">
+              Upload Premiere XML first (Step 1)
             </p>
           )}
         </div>
       )}
 
       {error && (
-        <p className="text-sm text-red-400 mt-3">{error}</p>
+        <p className="text-[10px] text-error uppercase tracking-[0.14em] mt-3">{error}</p>
       )}
     </div>
   );

@@ -59,26 +59,32 @@ export function JobList() {
   };
 
   if (loading) {
-    return <p className="text-muted text-sm">Loading jobs...</p>;
+    return (
+      <p className="text-[10px] text-muted-foreground uppercase tracking-[0.14em]">
+        Loading jobs...
+      </p>
+    );
   }
 
   if (jobs.length === 0) {
     return (
-      <div className="text-center py-12 text-muted">
-        <p className="text-lg mb-2">No transcription jobs yet</p>
-        <p className="text-sm">
+      <div className="text-center py-16">
+        <p className="text-xs font-bold uppercase tracking-[0.14em] mb-2">
+          No transcription jobs yet
+        </p>
+        <p className="text-[10px] text-muted-foreground uppercase tracking-[0.14em]">
           Go to{" "}
-          <a href="/upload" className="text-accent hover:underline">
+          <a href="/upload" className="text-accent hover:text-accent-hover">
             Upload
           </a>{" "}
-          to get started.
+          to get started
         </p>
       </div>
     );
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-2">
       {jobs.map((job) => (
         <JobCard
           key={job.id}

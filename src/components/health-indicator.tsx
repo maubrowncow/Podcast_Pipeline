@@ -32,21 +32,24 @@ export function HealthIndicator() {
   const isOnline = health?.whisperx === "online";
 
   return (
-    <div className="flex items-center gap-2 text-sm text-muted" title={
-      health
-        ? `WhisperX: ${health.whisperx}${health.model ? ` | Model: ${health.model}` : ""}${health.gpu ? ` | GPU: ${health.gpu}` : ""}`
-        : "Checking..."
-    }>
-      <div
-        className={`w-2 h-2 rounded-full ${
+    <div
+      className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground"
+      title={
+        health
+          ? `WhisperX: ${health.whisperx}${health.model ? ` | Model: ${health.model}` : ""}${health.gpu ? ` | GPU: ${health.gpu}` : ""}`
+          : "Checking..."
+      }
+    >
+      <span
+        className={`inline-block w-1.5 h-1.5 rounded-full ${
           health === null
-            ? "bg-muted"
+            ? "bg-muted-foreground"
             : isOnline
-              ? "bg-success"
+              ? "bg-accent-green"
               : "bg-error"
         }`}
       />
-      <span>WhisperX</span>
+      <span>Scribe</span>
     </div>
   );
 }

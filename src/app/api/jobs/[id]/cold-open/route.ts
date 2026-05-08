@@ -14,15 +14,23 @@ You will receive a timecoded transcript. Your job: craft THREE cold open variati
 ## Core Rules
 
 1. **ONLY use VERBATIM quotes** from the transcript — word for word, no paraphrasing. This is critical because these quotes will be fuzzy-matched back to timecodes for automated editing.
-2. **Target 30-45 seconds total** per variation (3-5 quotes each).
-3. **Each quote must stand alone** — no dangling pronouns, no "he said" without knowing who "he" is.
+2. **Each quote must stand alone** — no dangling pronouns, no "he said" without knowing who "he" is.
+3. **The "hook" field is the pattern interrupt ONLY.** It must NOT be repeated in the quotes array. The hook and every quote must be different passages from the transcript.
+
+## Duration Targets (CRITICAL — do the math)
+
+People speak at approximately 3 words per second. Target **120-150 total words** across the hook + all quotes per variation. This produces 40-50 seconds of content.
+
+Before finalizing, COUNT the words in your hook and all quotes. If the total is under 120 words, you need more or longer quotes. Each variation should have **5-7 quotes** (not counting the hook). Short single-sentence quotes are fine for the hook and open loop, but the arc beats should be SUBSTANTIAL — 20-40+ words each. Pull multi-sentence passages when the speaker is building a thought. Do not truncate a thought into fragments.
+
+Compute totalEstimatedSeconds as: total word count / 3 (rounded). Do not estimate — calculate.
 
 ## Hook Layering Structure (every variation must follow this)
 
-- **Beat 1 (0-5 seconds): Pattern Interrupt** — The single most striking statement. Stop the scroll. This is the 3-second hook that determines if the viewer stays.
-- **Beat 2 (5-15 seconds): Promise Confirmation** — Why this episode is worth the viewer's time. Context, stakes, or a bold claim.
-- **Beat 3 (15-30+ seconds): Story Arc** — An emotional journey following Kurt Vonnegut's "Man in a Hole" shape (stable → fall → hint at rise) or another appropriate shape. Build tension.
-- **Beat 4 (final beat): Open Loop** — The last quote MUST be cut mid-thought, mid-revelation, or leave a question unanswered. This unresolved tension bridges the viewer into the main episode. The Zeigarnik Effect — humans fixate on unfinished thoughts.
+- **Beat 1: Pattern Interrupt (hook)** — The single most striking statement. Stop the scroll. Short and punchy: 5-15 words.
+- **Beat 2: Promise** — Why this episode is worth the viewer's time. Context, stakes, or a bold claim. 1-2 quotes.
+- **Beat 3: Story Arc** — The emotional core. This is where density lives. Follow Kurt Vonnegut's "Man in a Hole" shape (stable → fall → hint at rise) or another shape. 2-4 quotes building a journey with emotional contrast. Pull LONG passages here — this is where the viewer invests.
+- **Beat 4: Open Loop** — The last quote MUST be cut mid-thought, mid-revelation, or leave a question unanswered. Zeigarnik Effect — humans fixate on unfinished thoughts.
 
 ## Emotional Contrast Rule
 
@@ -46,6 +54,7 @@ Open with a teased revelation or incomplete story — something that creates imm
 3. Incomplete narratives where the payoff comes later
 4. Raw vulnerability or emotional admission
 5. Humor or unexpected lightness after tension
+6. Multi-sentence passages where the speaker builds momentum — these create the arc density a cold open needs
 
 ## Output Format
 
@@ -57,23 +66,25 @@ Return ONLY a JSON object — no markdown, no prose, no explanation:
       "strategy": "hot_take",
       "strategyLabel": "The Hot Take",
       "storyShape": "man_in_a_hole",
-      "hook": "exact verbatim quote from transcript",
+      "hook": "short punchy verbatim quote — pattern interrupt only",
       "quotes": [
         {
-          "text": "exact verbatim quote",
+          "text": "verbatim quote — pull long multi-sentence passages for arc beats",
           "beat": "promise",
           "emotion": "vulnerability",
           "reason": "one sentence on why this lands here"
         }
       ],
       "openLoop": "Brief description of why the final quote creates unresolved tension",
-      "totalEstimatedSeconds": 38
+      "totalWordCount": 135,
+      "totalEstimatedSeconds": 45
     }
   ]
 }
 
 The "beat" field must be one of: "promise", "arc", "open_loop".
-The "emotion" field must be one of: "surprise", "vulnerability", "curiosity", "humor", "controversy", "conviction".`;
+The "emotion" field must be one of: "surprise", "vulnerability", "curiosity", "humor", "controversy", "conviction".
+totalWordCount = sum of words in hook + all quote texts. totalEstimatedSeconds = totalWordCount / 3, rounded.`;
 
 export async function POST(
   req: NextRequest,
@@ -108,6 +119,17 @@ export async function POST(
 
   const condensedText = toCondensedText(segments);
 
+  // Read optional creative direction from request body
+  let direction = "";
+  try {
+    const body = await req.json();
+    if (body.direction && typeof body.direction === "string") {
+      direction = body.direction.trim();
+    }
+  } catch {
+    // No body or invalid JSON — fine, direction stays empty
+  }
+
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
     return NextResponse.json({ error: "ANTHROPIC_API_KEY not set" }, { status: 500 });
@@ -115,16 +137,20 @@ export async function POST(
 
   const client = new Anthropic({ apiKey });
 
+  const userMessage = direction
+    ? `Here is the timecoded transcript. Create three cold open variations following the methodology in your instructions.\n\n**Creative direction from the producer:** ${direction}\n\n---TRANSCRIPT---\n${condensedText}`
+    : `Here is the timecoded transcript. Create three cold open variations following the methodology in your instructions.\n\n---TRANSCRIPT---\n${condensedText}`;
+
   let scriptJson: string;
   try {
     const message = await client.messages.create({
       model: "claude-sonnet-4-6",
-      max_tokens: 4096,
+      max_tokens: 8192,
       system: COLD_OPEN_SYSTEM_PROMPT,
       messages: [
         {
           role: "user",
-          content: `Here is the timecoded transcript. Create three cold open variations following the methodology in your instructions.\n\n---TRANSCRIPT---\n${condensedText}`,
+          content: userMessage,
         },
       ],
     });

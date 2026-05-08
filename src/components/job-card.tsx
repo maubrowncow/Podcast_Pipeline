@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { StatusBadge } from "./status-badge";
+import { Button } from "@/components/ui/button";
 
 interface JobData {
   id: number;
@@ -49,6 +50,14 @@ function formatFileSize(bytes: number): string {
   return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
 }
 
+const STATUS_ACCENT: Record<string, string> = {
+  completed: "border-l-accent-green",
+  processing: "border-l-accent-blue",
+  pending: "border-l-accent-yellow",
+  failed: "border-l-error",
+  cancelled: "border-l-muted-foreground",
+};
+
 export function JobCard({
   job,
   onRetry,
@@ -61,58 +70,77 @@ export function JobCard({
   onDelete: (id: number) => void;
 }) {
   const isClickable = job.status !== "cancelled";
+  const leftAccent = STATUS_ACCENT[job.status] ?? "border-l-border";
 
   const card = (
     <div
-      className={`border border-border rounded-lg p-4 bg-card ${
-        isClickable ? "hover:border-accent cursor-pointer" : ""
-      } transition-colors`}
+      className={`border border-border border-l-[3px] ${leftAccent} bg-card px-4 py-3 transition-colors ${
+        isClickable ? "hover:border-accent hover:border-l-accent cursor-pointer" : ""
+      }`}
     >
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2 mb-1">
-            <h3 className="font-medium truncate">{job.originalFilename}</h3>
+          <div className="flex items-center gap-3 mb-1.5">
+            <h3 className="text-xs font-bold tracking-[0.08em] truncate">
+              {job.originalFilename}
+            </h3>
             <StatusBadge status={job.status} />
           </div>
-          <div className="flex gap-3 text-xs text-muted">
-            <span>{formatRelativeTime(job.createdAt)}</span>
-            {job.fileSizeBytes && <span>{formatFileSize(job.fileSizeBytes)}</span>}
+          <div className="flex gap-4 text-[10px] uppercase tracking-[0.14em]">
+            <span className="text-muted-foreground">{formatRelativeTime(job.createdAt)}</span>
+            {job.fileSizeBytes && (
+              <span className="text-cold-grey">{formatFileSize(job.fileSizeBytes)}</span>
+            )}
             {job.durationSeconds && (
-              <span>Duration: {formatDuration(job.durationSeconds)}</span>
+              <span className="text-accent-blue">{formatDuration(job.durationSeconds)}</span>
             )}
             {job.processingSeconds && (
-              <span>Processed in {formatDuration(job.processingSeconds)}</span>
+              <span className="text-accent-green">
+                Proc {formatDuration(job.processingSeconds)}
+              </span>
             )}
-            {job.language && <span>Lang: {job.language}</span>}
+            {job.language && (
+              <span className="text-accent-yellow">{job.language}</span>
+            )}
           </div>
           {job.error && (
-            <p className="text-xs text-error mt-1 truncate">{job.error}</p>
+            <p className="text-[10px] text-error mt-1 truncate tracking-[0.08em]">
+              {job.error}
+            </p>
           )}
         </div>
-        <div className="flex gap-1 shrink-0" onClick={(e) => e.preventDefault()}>
+        <div
+          className="flex gap-1 shrink-0"
+          onClick={(e) => e.preventDefault()}
+        >
           {(job.status === "failed" || job.status === "cancelled") && (
-            <button
+            <Button
+              size="xs"
+              variant="bracket"
+              className="text-accent hover:text-accent-hover"
               onClick={() => onRetry(job.id)}
-              className="px-2 py-1 text-xs rounded bg-accent text-white hover:bg-accent-hover transition-colors"
             >
               Retry
-            </button>
+            </Button>
           )}
           {job.status === "pending" && (
-            <button
+            <Button
+              size="xs"
+              variant="bracket"
               onClick={() => onCancel(job.id)}
-              className="px-2 py-1 text-xs rounded border border-border text-muted hover:text-foreground transition-colors"
             >
               Cancel
-            </button>
+            </Button>
           )}
           {job.status !== "processing" && (
-            <button
+            <Button
+              size="xs"
+              variant="bracket"
+              className="hover:text-error"
               onClick={() => onDelete(job.id)}
-              className="px-2 py-1 text-xs rounded border border-border text-muted hover:text-error transition-colors"
             >
               Delete
-            </button>
+            </Button>
           )}
         </div>
       </div>

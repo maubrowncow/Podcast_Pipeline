@@ -50,3 +50,9 @@ __pycache__/
 # sensitive docs (SSH credentials, connection details)
 windows-pc-ssh-agent-guide.md
 windows-ssh-setup.md
+
+# claude local settings
+.claude/settings.local.json
+
+# sample files
+sample premiere xml export.xml

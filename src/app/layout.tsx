@@ -1,21 +1,17 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Space_Mono } from "next/font/google";
 import Link from "next/link";
 import "./globals.css";
 import { HealthIndicator } from "@/components/health-indicator";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const spaceMono = Space_Mono({
+  variable: "--font-space-mono",
   subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
+  weight: ["400", "700"],
 });
 
 export const metadata: Metadata = {
-  title: "Diggnation Pipeline",
+  title: "Podcast Pipeline",
   description: "Podcast transcription and content pipeline",
 };
 
@@ -26,24 +22,28 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-      >
-        <header className="border-b border-border bg-card px-6 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-6">
-            <Link href="/" className="text-lg font-semibold">
-              Diggnation Pipeline
+      <body className={`${spaceMono.variable} antialiased`}>
+        <header className="border-b border-border px-6 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-8">
+            <Link
+              href="/"
+              className="text-xs font-bold uppercase tracking-[0.14em] text-foreground hover:text-accent transition-colors flex items-center gap-2"
+            >
+              <span className="inline-block w-2 h-2 rounded-full bg-accent" />
+              Podcast Pipeline
             </Link>
-            <nav className="flex gap-4 text-sm">
+            <nav className="flex gap-6">
               <Link
                 href="/"
-                className="text-muted hover:text-foreground transition-colors"
+                data-slot="bracket-btn"
+                className="text-[11px] font-bold uppercase tracking-[0.14em] text-muted-foreground hover:text-accent transition-colors"
               >
                 Dashboard
               </Link>
               <Link
                 href="/upload"
-                className="text-muted hover:text-foreground transition-colors"
+                data-slot="bracket-btn"
+                className="text-[11px] font-bold uppercase tracking-[0.14em] text-muted-foreground hover:text-accent transition-colors"
               >
                 Upload
               </Link>

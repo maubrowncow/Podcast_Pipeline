@@ -58,17 +58,16 @@ export function JobLogViewer({ jobId, isActive }: { jobId: number; isActive: boo
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [logs]);
 
-  // Always render when active — show connection state even if no logs yet
   if (!isActive && logs.length === 0) return null;
 
   return (
     <div className="mt-4">
       {logs.length > 0 ? (
-        <div className="max-h-80 overflow-y-auto">
-          <ul className="space-y-1.5">
+        <div className="max-h-80 overflow-y-auto border border-border bg-card p-4">
+          <ul className="space-y-1">
             {logs.map((log) => (
-              <li key={log.id} className="flex gap-3 text-sm leading-relaxed">
-                <span className="text-muted shrink-0 tabular-nums text-xs pt-0.5">
+              <li key={log.id} className="flex gap-3 text-xs leading-relaxed tracking-[0.08em]">
+                <span className="text-muted-foreground shrink-0 tabular-nums text-[10px] pt-0.5">
                   {new Date(log.createdAt).toLocaleTimeString()}
                 </span>
                 <span
@@ -76,7 +75,7 @@ export function JobLogViewer({ jobId, isActive }: { jobId: number; isActive: boo
                     log.level === "error"
                       ? "text-error"
                       : log.level === "warn"
-                      ? "text-amber-600"
+                      ? "text-accent-yellow"
                       : "text-foreground"
                   }
                 >
@@ -88,12 +87,18 @@ export function JobLogViewer({ jobId, isActive }: { jobId: number; isActive: boo
           <div ref={bottomRef} />
         </div>
       ) : (
-        <p className="text-sm text-muted">Connecting to log stream...</p>
+        <p className="text-[10px] text-muted-foreground uppercase tracking-[0.14em]">
+          Connecting to log stream...
+        </p>
       )}
       {isActive && (
-        <div className="flex items-center gap-2 mt-3 text-xs text-muted">
-          <span className={`inline-block w-1.5 h-1.5 rounded-full ${connected ? "bg-green-500" : "bg-amber-500"} animate-pulse`} />
-          {connected ? "Listening for updates..." : "Reconnecting..."}
+        <div className="flex items-center gap-2 mt-3 text-[10px] text-muted-foreground uppercase tracking-[0.14em]">
+          <span
+            className={`inline-block w-1.5 h-1.5 rounded-full ${
+              connected ? "bg-accent-green" : "bg-accent-yellow"
+            } animate-pulse`}
+          />
+          {connected ? "Listening..." : "Reconnecting..."}
         </div>
       )}
     </div>

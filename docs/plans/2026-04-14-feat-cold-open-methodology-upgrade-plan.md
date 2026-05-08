@@ -215,29 +215,29 @@ After Step 2 (Generate), show a tabbed interface with 3 tabs:
 ## Acceptance Criteria
 
 ### Phase 1 — XML Fix
-- [ ] Generated FCP7 XML imports into Premiere Pro without errors
-- [ ] Output XML has file definitions inside clipitems (first inline, then self-closing refs)
-- [ ] Clip `<duration>` reflects source file duration, not timeline clip duration
-- [ ] Video `<samplecharacteristics>` includes width, height, pixel aspect ratio
-- [ ] Audio clips have `<sourcetrack>` and `<link>` elements
-- [ ] Parser handles nested sequences (extracts clips from inner sequence)
+- [x] Generated FCP7 XML imports into Premiere Pro without errors
+- [x] Output XML has file definitions inside clipitems (first inline, then self-closing refs)
+- [x] Clip `<duration>` reflects source file duration, not timeline clip duration
+- [x] Video `<samplecharacteristics>` includes width, height, pixel aspect ratio
+- [x] Audio clips have `<sourcetrack>` and `<link>` elements
+- [x] Parser handles nested sequences (extracts clips from inner sequence)
 - [ ] Test: upload sample XML, resolve a quote, download cold open XML, import into Premiere
 
 ### Phase 2 — Methodology
-- [ ] Claude returns 3 variations with different emotional strategies
-- [ ] Each variation has: hook, 3-5 quotes with beat/emotion labels, open loop description
-- [ ] Target duration 30-45 seconds per variation
-- [ ] All quotes are verbatim (validated by quote resolver confidence > 0.5)
-- [ ] GET endpoint handles old single-script format gracefully
-- [ ] `max_tokens` increased to 4096
+- [x] Claude returns 3 variations with different emotional strategies
+- [x] Each variation has: hook, 3-5 quotes with beat/emotion labels, open loop description
+- [x] Target duration 30-45 seconds per variation
+- [x] All quotes are verbatim (validated by quote resolver confidence > 0.5)
+- [x] GET endpoint handles old single-script format gracefully
+- [x] `max_tokens` increased to 4096
 
 ### Phase 3 — UI
-- [ ] Tabbed variation selector showing all 3 options
-- [ ] Each tab displays hook, quotes with metadata, story shape, open loop
-- [ ] Download XML button exports the selected variation
-- [ ] Downloaded filename includes strategy name
-- [ ] Regeneration shows confirmation dialog
-- [ ] Loading state says "Generating 3 cold open variations..."
+- [x] Tabbed variation selector showing all 3 options
+- [x] Each tab displays hook, quotes with metadata, story shape, open loop
+- [x] Download XML button exports the selected variation
+- [x] Downloaded filename includes strategy name
+- [x] Regeneration shows confirmation dialog
+- [x] Loading state says "Generating 3 cold open variations..."
 
 ## Files to Modify
 
